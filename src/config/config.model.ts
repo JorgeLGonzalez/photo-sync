@@ -5,8 +5,14 @@ export interface IGooglePhotosConfig {
   clientSecret: string;
 }
 
+export interface IOneDriveConfig {
+  clientId: string;
+  tenantId: string;
+}
+
 export interface IAppConfig {
   googlePhotos: IGooglePhotosConfig;
+  oneDrive: IOneDriveConfig;
 }
 
 export interface IGoogleCredentials extends Credentials {
