@@ -1,11 +1,21 @@
 export interface IOneDriveItem {
+  '@microsoft.graph.downloadUrl': string;
+  description: string;
   id: string;
+  file: {
+    mimeType: string;
+    hashes: {
+      quickXorHash: string;
+      sha1Hash: string;
+      sha256Hash: string;
+    };
+  };
   name: string;
-  size: number;
-  webUrl: string;
   photo: {
     takenDateTime: string;
   };
+  size: number;
+  webUrl: string;
 }
 
 export interface IOneDriveQueryResult {

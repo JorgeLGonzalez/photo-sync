@@ -1,9 +1,10 @@
 import { Module } from '@nestjs/common';
-import { OneDriveModule } from 'src/one-drive/OneDrive.module';
+import { GooglePhotosModule } from '../google-photos/GooglePhotos.module';
+import { OneDriveModule } from '../one-drive/OneDrive.module';
 import { PhotoRepo } from './PhotoRepo';
 
 @Module({
-  imports: [OneDriveModule],
+  imports: [GooglePhotosModule, OneDriveModule],
   providers: [PhotoRepo],
 })
 export class PhotoRepoModule {}

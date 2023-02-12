@@ -4,6 +4,7 @@ import { GooglePhotosApi } from './GooglePhotosApi';
 
 @Module({
   controllers: [GooglePhotosController],
+  exports: [GooglePhotosApi],
   providers: [GooglePhotosApi],
 })
 export class GooglePhotosModule {}

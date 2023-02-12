@@ -1,3 +1,5 @@
+import { Readable } from 'node:stream';
+
 export interface IGooglePhotoItem {
   id: string;
   name: string;
@@ -16,4 +18,12 @@ export interface IPhotoRecord {
 
 export interface IPhotoRepo {
   records: IPhotoRecord[];
+}
+
+export interface IPhotoTransferInfo {
+  description: string;
+  id: string;
+  mimeType: string;
+  stream: Readable;
+  uniqueName: string;
 }
