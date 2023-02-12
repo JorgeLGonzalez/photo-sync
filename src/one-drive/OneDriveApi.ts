@@ -17,6 +17,7 @@ import path from 'path';
 import { IPhotoRecord } from 'src/photo-repo/photo-repo.model';
 import { pipeline } from 'stream/promises';
 import { IAppConfig } from '../config/config.model';
+import { IOneDriveItem, IOneDriveQueryResult } from './one-drive.model';
 
 const scopes = ['user.read', 'mail.read', 'files.read.all'];
 
@@ -38,16 +39,28 @@ export class OneDriveApi implements OnModuleInit {
     }
     const downloadInfo = await this.api
       .api(
-        `/me/drive/items/${record.id}?select=id,@microsoft.graph.downloadUrl`,
+        `/me/drive/items/${record.id}` +
+          '?select=id,@microsoft.graph.downloadUrl,file',
       )
       .get();
     const downloadUrl = downloadInfo['@microsoft.graph.downloadUrl'];
+    console.log('downloadInfo', JSON.stringify(downloadInfo, undefined, 2));
     const filePath = path.join(
       homedir(),
       `Downloads/${record.id}-${record.name}`,
     );
     await pipeline(got.stream(downloadUrl), createWriteStream(filePath));
     this.logger.log(`Saved ${record.id} to ${filePath}`);
+  }
+
+  public async downloadRecords(): Promise<void> {
+    const records = await this.downloadPage(
+      '/me/drive/items/2A6D8CEFB23FAC76%2133520/children',
+    );
+
+    // const filePath = path.join(homedir(), 'Downloads/photo-db.json');
+    // await writeFile(filePath, JSON.stringify(records));
+    // console.log('Wrote', records.length, 'records to', filePath);
   }
 
   public async onModuleInit(): Promise<void> {
@@ -62,6 +75,9 @@ export class OneDriveApi implements OnModuleInit {
 
         this.createApi({ getToken: async () => token });
 
+        // TODO temp
+        // await this.downloadRecords();
+
         return;
       }
 
@@ -69,6 +85,42 @@ export class OneDriveApi implements OnModuleInit {
     }
 
     this.getFreshAuthToken();
+  }
+
+  private async downloadPage(req: string): Promise<IPhotoRecord[]> {
+    if (!this.api) {
+      throw new Error('No API');
+    }
+
+    const result: IOneDriveQueryResult = await this.api
+      .api(req)
+      .select('id,name,size,webUrl,photo,lastModifiedDateTime,fileSystemInfo')
+      .top(999)
+      .get();
+
+    this.logger.log(
+      ['Found', result['@odata.count'], 'photos in the Love album'].join(' '),
+    );
+    this.logger.log(`Got ${result.value.length} in this page`);
+
+    const page = result.value.map(
+      ({ id, name, size, webUrl, photo }: IOneDriveItem): IPhotoRecord => ({
+        id,
+        name,
+        size,
+        webUrl,
+        photoDate: photo.takenDateTime,
+      }),
+    );
+
+    // console.log('page', JSON.stringify(result.value, undefined, 2));
+
+    const nextReq = result['@odata.nextLink'];
+    if (!nextReq) return page;
+
+    console.log('skipToken', result['@odata.nextLink']);
+    // return page.concat(await this.downloadPage(nextReq));
+    return [];
   }
 
   private async getFreshAuthToken(): Promise<void> {

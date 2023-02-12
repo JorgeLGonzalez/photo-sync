@@ -21,8 +21,8 @@ export class PhotoRepo implements OnModuleInit {
     const missing = repo.records.filter((r) => !r.google);
     this.logger.log(`${missing.length} photos missing from Google Photos`);
 
-    missing.slice(0, 2).forEach((f) => {
-      this.oneDriveApi.downloadPhoto(f);
-    });
+    // missing.slice(0, 2).forEach((f) => {
+    //   this.oneDriveApi.downloadPhoto(f);
+    // });
   }
 }
