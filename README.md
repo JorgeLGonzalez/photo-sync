@@ -1,21 +1,20 @@
 # Photo Sync
 
 Synchronize photos between the main Album in OneDrive and Google Photos.
+Very rudimentary at the moment.
+
+1. Authenticate with both Microsoft and Google via OAuth2 delegation. `OneDriveApi.onModuleInit` initiates authentication for Microsoft while `GooglePhotosAp.OnModuleInit` does it for Google.
+2. `PhotoRepo.onModuleInit` awaits authorization and then:
+   - Loads existing `IPhotoRepo` from local JSON (or creates new one)
+   - Downloads all photo records (metadata) from the specified album in OneDrive and updates the DB.
+   - For any missing from Google (based on repo) or updated since last sync, copies the photo to the given album in Google Photos.
 
 Next steps:
 
-- Resolve error uploading to album. Think album needs to be created by app to get proper rights. "[Media items can only be added to albums created by your app.](https://developers.google.com/photos/library/guides/upload-media)"
-- Once we can upload all photos. Either we optimistically add to photo record or we verify at end. Not sure what happens with duplicates.
-  - test all this out with a small batch
-- At startup, it should download all photos from 1drive (or ideally just those modified/created since prior attempt). Then save DB. Should download from google as well and reconcile. Then check for missing.
-
-[Google upload](https://developers.google.com/photos/library/guides/upload-media)
-[Add to Google Album](https://developers.google.com/photos/library/reference/rest/v1/albums/batchAddMediaItems)
-
-- Can we extend expiration of auth tokens? By how much?
-- convert to esm
-
-Other TODO
-
-- Improve auth stuff. If credentials expired or absent, google api still tries to do stuff. MS should improve way to refresh expired token.
-- Debug not working
+- Authentication for Microsoft expires after 1h and requires a code. Look into refreshable tokens.
+- Download photo metadata from Google to ensure local repo is accurate.
+- Download from MS only files added to album or updated since last sync. (OneDrive has a sync feature as well which perhaps could be worth it.)
+- Authentication for Google seems to allow token refreshing, but not sure for how long. However, it will not refresh during a run.
+- Convert to esm
+- Run as CLI or shutdown server once done. (It is only a server because Google auth uses a callback for initial tokens.) Could of course turn into a web or other better UI-based app, but that seems hardly worth it...
+- Improve transfer speed by parallel transfers and bulk creation of media items in Google. (Totally overkill for my use case.)
