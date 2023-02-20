@@ -22,7 +22,6 @@ import { IAppConfig } from '../config/config.model';
 import { IOneDriveItem, IOneDriveQueryResult } from './one-drive.model';
 
 const scopes = ['user.read', 'mail.read', 'files.read.all'];
-
 const TokenFilePath = path.join(homedir(), 'Downloads/ms-auth-tokens.json');
 
 type IDownloadSubset = Pick<
@@ -34,11 +33,17 @@ type IDownloadSubset = Pick<
 export class OneDriveApi implements OnModuleInit {
   private api?: Client;
 
+  public readonly authorization: Promise<void>;
+
+  private authorized = (): void => undefined;
+
   private readonly logger = new Logger(OneDriveApi.name);
 
-  public constructor(
-    private readonly config: ConfigService<IAppConfig, true>,
-  ) {}
+  public constructor(private readonly config: ConfigService<IAppConfig, true>) {
+    this.authorization = new Promise((r) => {
+      this.authorized = r;
+    });
+  }
 
   public async downloadPhoto(
     record: IPhotoRecord,
@@ -52,34 +57,23 @@ export class OneDriveApi implements OnModuleInit {
           '?select=@microsoft.graph.downloadUrl,description,id,file,name',
       )
       .get();
-    // const downloadUrl = downloadInfo['@microsoft.graph.downloadUrl'];
-    // console.log('downloadInfo', JSON.stringify(downloadInfo, undefined, 2));
-    // const filePath = path.join(
-    //   homedir(),
-    //   `Downloads/${record.id}-${record.name}`,
-    // );
-
-    // await pipeline(got.stream(downloadUrl), createWriteStream(filePath));
-    // this.logger.log(`Saved ${record.id} to ${filePath}`);
-    this.logger.debug(`Download from OneDrive: ${downloadInfo.id}`);
+    this.logger.verbose(
+      `Download photo from OneDrive: ${downloadInfo.id}_${downloadInfo.name}`,
+    );
 
     return {
       description: downloadInfo.description,
       id: downloadInfo.id,
       mimeType: downloadInfo.file.mimeType,
       stream: got.stream(downloadInfo['@microsoft.graph.downloadUrl']),
-      uniqueName: [downloadInfo.id, downloadInfo.name].join('-'),
+      uniqueName: [downloadInfo.id, downloadInfo.name].join('|'),
     };
   }
 
-  public async downloadRecords(): Promise<void> {
-    const records = await this.downloadPage(
+  public async downloadRecords(): Promise<IPhotoRecord[]> {
+    return await this.downloadPage(
       '/me/drive/items/2A6D8CEFB23FAC76%2133520/children',
     );
-
-    // const filePath = path.join(homedir(), 'Downloads/photo-db.json');
-    // await writeFile(filePath, JSON.stringify(records));
-    // console.log('Wrote', records.length, 'records to', filePath);
   }
 
   public async onModuleInit(): Promise<void> {
@@ -93,9 +87,7 @@ export class OneDriveApi implements OnModuleInit {
         this.logger.log(`Credentials will expire on ${expiration}`);
 
         this.createApi({ getToken: async () => token });
-
-        // TODO temp
-        // await this.downloadRecords();
+        this.authorized();
 
         return;
       }
@@ -113,7 +105,7 @@ export class OneDriveApi implements OnModuleInit {
 
     const result: IOneDriveQueryResult = await this.api
       .api(req)
-      .select('id,name,size,webUrl,photo,lastModifiedDateTime,file')
+      .select('id,name,size,webUrl,photo,lastModifiedDateTime,file,description')
       .top(999)
       .get();
 
@@ -123,12 +115,16 @@ export class OneDriveApi implements OnModuleInit {
     this.logger.log(`Got ${result.value.length} in this page`);
 
     const page = result.value.map(
-      ({ id, name, size, webUrl, photo }: IOneDriveItem): IPhotoRecord => ({
-        id,
-        name,
-        size,
-        webUrl,
-        photoDate: photo.takenDateTime,
+      (item: IOneDriveItem): IPhotoRecord => ({
+        description: item.description,
+        id: item.id,
+        image: item.image,
+        lastModifiedDateTime: item.lastModifiedDateTime,
+        mimeType: item.file.mimeType,
+        name: item.name,
+        photoDate: item.photo.takenDateTime,
+        size: item.size,
+        webUrl: item.webUrl,
       }),
     );
 
@@ -138,8 +134,7 @@ export class OneDriveApi implements OnModuleInit {
     if (!nextReq) return page;
 
     console.log('skipToken', result['@odata.nextLink']);
-    // return page.concat(await this.downloadPage(nextReq));
-    return [];
+    return page.concat(await this.downloadPage(nextReq));
   }
 
   private async getFreshAuthToken(): Promise<void> {
@@ -155,6 +150,8 @@ export class OneDriveApi implements OnModuleInit {
     const token = await tokenProvider.getToken(scopes);
     await writeFile(TokenFilePath, JSON.stringify(token));
     this.logger.log(`Tokens saved to ${TokenFilePath}`);
+
+    this.authorized();
   }
 
   private createApi(tokenProvider: TokenCredential): void {

@@ -2,6 +2,8 @@ export interface IOneDriveItem {
   '@microsoft.graph.downloadUrl': string;
   description: string;
   id: string;
+  image: { height: number; width: number };
+  lastModifiedDateTime: string;
   file: {
     mimeType: string;
     hashes: {

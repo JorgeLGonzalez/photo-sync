@@ -3,17 +3,26 @@ import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { google } from 'googleapis';
 import { OAuth2Client } from 'googleapis-common';
-import got from 'got';
+import { Credentials } from 'google-auth-library';
+import got, { RequestError } from 'got';
 import { existsSync } from 'node:fs';
 import { readFile, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import path from 'node:path';
 import { Readable } from 'node:stream';
-import { IPhotoTransferInfo } from '../photo-repo/photo-repo.model';
+import {
+  IGooglePhotoItem,
+  IPhotoTransferInfo,
+} from '../photo-repo/photo-repo.model';
 import { IAppConfig, IGoogleCredentials } from '../config/config.model';
+import { nanoid } from 'nanoid';
+import {
+  IGoogleBatchCreateResponse,
+  IGoogleNewMediaItemResult,
+} from './google-photos.model';
 
 const AlbumId =
-  'AGhGL1sp3vIzygfRJw0sid9ySwLa01EkXpeu7QYiihJ0JjVfbwlF6nGY-Pih_bsT42-L8qKNXysa';
+  'AGhGL1vslTyXdKn0MsVVjqPooakNr94hkp8-ZNzVo4xIw5LC8IN-HXp1rGgI4LS2HLzjU1WMjIKx';
 
 const TokenFilePath = path.join(homedir(), 'Downloads/google-auth-tokens.json');
 
@@ -42,34 +51,43 @@ export class GooglePhotosApi implements OnModuleInit {
         Authorization: this.authorization,
       },
     });
-    console.log('res status', res.statusText);
 
-    console.log(await res.text());
-    console.log('res ^^');
+    const payload = await res.json();
 
-    // const json = await res.json();
-    // console.log(JSON.stringify(json, undefined, 2));
+    if (!res.ok) {
+      const info = `status: ${res.status}: ${JSON.stringify(payload)}`;
+      this.logger.error(info);
+      throw new Error(`Error listing albums: ${info} `);
+    }
+
+    this.logger.log(payload);
   }
 
   public async onModuleInit(): Promise<void> {
-    if (existsSync(TokenFilePath)) {
-      const tokens: IGoogleCredentials = JSON.parse(
-        await readFile(TokenFilePath, 'utf-8'),
-      );
-
-      const expiration = new Date(tokens.expiry_date);
-      if (tokens.expiry_date > Date.now()) {
-        this.logger.log(`Credentials will expire on ${expiration}`);
-
-        this.client.setCredentials(tokens);
-
-        return;
-      }
+    if (!existsSync(TokenFilePath)) {
+      this.showAuthUrl();
 
       return;
     }
 
-    this.showAuthUrl();
+    const tokens: IGoogleCredentials = JSON.parse(
+      await readFile(TokenFilePath, 'utf-8'),
+    );
+
+    const expiration = new Date(tokens.expiry_date);
+    this.client.setCredentials(tokens);
+
+    if (tokens.expiry_date > Date.now()) {
+      this.logger.log(`Credentials will expire on ${expiration}`);
+
+      return;
+    }
+
+    this.logger.log(`Credentials expired on ${expiration}. Refreshing...`);
+    const res = await this.client.refreshAccessToken();
+    this.logger.log('Tokens refreshed. Testing album listing.');
+    await this.listAlbums();
+    await this.saveCredentials(res.credentials);
   }
 
   public async saveToken(code: string): Promise<void> {
@@ -77,9 +95,7 @@ export class GooglePhotosApi implements OnModuleInit {
       throw new Error('No code!');
     }
     const { tokens } = await this.client.getToken(code);
-
-    await writeFile(TokenFilePath, JSON.stringify(tokens));
-    this.logger.log(`Google credentials saved to ${TokenFilePath}`);
+    await this.saveCredentials(tokens);
   }
 
   private showAuthUrl(): void {
@@ -94,33 +110,39 @@ export class GooglePhotosApi implements OnModuleInit {
     }, 2000);
   }
 
-  public async uploadPhoto(info: IPhotoTransferInfo): Promise<void> {
+  public async uploadPhoto(
+    info: IPhotoTransferInfo,
+  ): Promise<IGooglePhotoItem> {
     const { mimeType, stream } = info;
+    this.logger.verbose(`Uploading bytes for ${info.uniqueName}`);
     const uploadToken = await this.uploadBytes(mimeType, stream);
-    this.logger.debug(`Upload token ${uploadToken}`);
-    await this.createMediaItem(uploadToken, info);
+    // this.logger.debug(`Upload token ${uploadToken}`);
+    this.logger.verbose(`Creating media item for ${info.uniqueName}`);
+    const result = await this.createMediaItem(
+      uploadToken,
+      info.description,
+      info.uniqueName,
+    );
+
+    // console.log('google item', result);
+    this.logger.verbose(`Created media item ${info.uniqueName}`);
+
+    return {
+      id: result.mediaItem.id,
+      name: result.mediaItem.filename,
+      photoDate: result.mediaItem.mediaMetadata.creationTime,
+      productUrl: result.mediaItem.productUrl,
+    };
   }
 
-  private async createMediaItem(
-    uploadToken: string,
-    info: IPhotoTransferInfo,
-  ): Promise<void> {
+  private async createAlbum(): Promise<void> {
     try {
       const res = await got.post(
-        'https://photoslibrary.googleapis.com/v1/mediaItems:batchCreate',
+        'https://photoslibrary.googleapis.com/v1/albums',
         {
-          json: {
-            // albumId: AlbumId,
-            newMediaItems: [
-              {
-                description: info.description,
-                simpleMediaItem: {
-                  fileName: info.uniqueName,
-                  uploadToken,
-                },
-              },
-            ],
-          },
+          json: { album: { id: nanoid(), title: 'Selections' } },
+          responseType: 'json',
+          resolveBodyOnly: true,
           headers: {
             Authorization: this.authorization,
             'Content-type': 'application/json',
@@ -128,13 +150,65 @@ export class GooglePhotosApi implements OnModuleInit {
         },
       );
 
-      console.log('Create media status code', res.statusCode);
-      console.log('Response', res.body);
+      console.log(res);
+    } catch (err) {
+      if (err instanceof RequestError) {
+        this.logger.error(err.response?.body);
+      }
+      this.logger.error(err);
+    }
+  }
+
+  private async createMediaItem(
+    uploadToken: string,
+    description: string,
+    uniqueName: string,
+  ): Promise<IGoogleNewMediaItemResult> {
+    try {
+      const res = await got.post<IGoogleBatchCreateResponse>(
+        'https://photoslibrary.googleapis.com/v1/mediaItems:batchCreate',
+        {
+          headers: {
+            Authorization: this.authorization,
+            'Content-type': 'application/json',
+          },
+          json: {
+            albumId: AlbumId,
+            newMediaItems: [
+              {
+                description,
+                simpleMediaItem: {
+                  fileName: uniqueName,
+                  uploadToken,
+                },
+              },
+            ],
+          },
+          resolveBodyOnly: true,
+          responseType: 'json',
+        },
+      );
+
+      const failures = res.newMediaItemResults
+        .map((m) => m.status.message)
+        .filter((status) => status !== 'Success');
+      if (failures.length) {
+        throw new Error(
+          `${failures.length} failures with statuses: ${failures.join(',')}`,
+        );
+      }
+
+      return res.newMediaItemResults[0];
     } catch (err) {
       this.logger.error(err);
       this.logger.error(JSON.stringify(err));
       throw err;
     }
+  }
+
+  private async saveCredentials(credentials: Credentials): Promise<void> {
+    await writeFile(TokenFilePath, JSON.stringify(credentials));
+    this.logger.log(`Google credentials saved to ${TokenFilePath}`);
   }
 
   private async uploadBytes(

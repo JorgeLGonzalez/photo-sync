@@ -3,21 +3,27 @@ import { Readable } from 'node:stream';
 export interface IGooglePhotoItem {
   id: string;
   name: string;
-  productUrl: string;
   photoDate: string;
+  productUrl: string;
 }
 
 export interface IPhotoRecord {
+  description: string;
+  google?: IGooglePhotoItem;
   id: string;
+  image: { height: number; width: number };
+  lastModifiedDateTime: string;
+  mimeType: string;
   name: string;
+  photoDate: string;
   size: number;
   webUrl: string;
-  photoDate: string;
-  google?: IGooglePhotoItem;
 }
 
 export interface IPhotoRepo {
+  creationDate: string;
   records: IPhotoRecord[];
+  updateDate: string;
 }
 
 export interface IPhotoTransferInfo {
