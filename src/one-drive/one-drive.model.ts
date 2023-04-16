@@ -1,3 +1,16 @@
+/**
+ * Token response from Microsoft
+ * See https://learn.microsoft.com/en-us/graph/auth-v2-user#authorization-response
+ */
+export interface IMicrosoftCredentials {
+  access_token: string;
+  expiry_date: number; // we set this since MS does not return it
+  expires_in: number; // seconds
+  ext_expires_in: number; // seconds
+  scope: string;
+  token_type: 'Bearer';
+}
+
 export interface IOneDriveItem {
   '@microsoft.graph.downloadUrl': string;
   description: string;

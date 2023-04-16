@@ -7,6 +7,8 @@ export interface IGooglePhotosConfig {
 
 export interface IOneDriveConfig {
   clientId: string;
+  clientSecret: string;
+  replyUrl: string;
   tenantId: string;
 }
 

@@ -1,5 +1,12 @@
 # Photo Sync
 
+TODO
+
+- Tried improving ms authentication. Was able to ge tokens and refresh token.
+  But with my registered app get error that tenant lacks SPO license. So screwed.
+  Go back to prior method. Can try using common tenant but then need the client secret. Or back to square one on how to use the auth code flow. So annoying!
+  See https://learn.microsoft.com/en-us/answers/questions/1075881/error-tenant-does-not-have-a-spo-license-for-perso
+
 Synchronize photos between the main Album in OneDrive and Google Photos.
 Very rudimentary at the moment.
 

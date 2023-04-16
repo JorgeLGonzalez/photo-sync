@@ -98,18 +98,6 @@ export class GooglePhotosApi implements OnModuleInit {
     await this.saveCredentials(tokens);
   }
 
-  private showAuthUrl(): void {
-    const url = this.client.generateAuthUrl({
-      access_type: 'offline',
-      scope: ['https://www.googleapis.com/auth/photoslibrary'],
-    });
-
-    setTimeout(() => {
-      console.log('\nNeed to get credentials for Google API.');
-      console.log(`Go to`, url);
-    }, 2000);
-  }
-
   public async uploadPhoto(
     info: IPhotoTransferInfo,
   ): Promise<IGooglePhotoItem> {
@@ -209,6 +197,18 @@ export class GooglePhotosApi implements OnModuleInit {
   private async saveCredentials(credentials: Credentials): Promise<void> {
     await writeFile(TokenFilePath, JSON.stringify(credentials));
     this.logger.log(`Google credentials saved to ${TokenFilePath}`);
+  }
+
+  private showAuthUrl(): void {
+    const url = this.client.generateAuthUrl({
+      access_type: 'offline',
+      scope: ['https://www.googleapis.com/auth/photoslibrary'],
+    });
+
+    setTimeout(() => {
+      console.log('\nNeed to get credentials for Google API.');
+      console.log(`Go to`, url);
+    }, 2000);
   }
 
   private async uploadBytes(

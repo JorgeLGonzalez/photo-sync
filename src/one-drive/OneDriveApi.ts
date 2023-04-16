@@ -1,5 +1,6 @@
 import {
   AccessToken,
+  AuthorizationCodeCredential,
   DeviceCodeCredential,
   DeviceCodeInfo,
   TokenCredential,
@@ -18,10 +19,15 @@ import {
   IPhotoRecord,
   IPhotoTransferInfo,
 } from 'src/photo-repo/photo-repo.model';
-import { IAppConfig } from '../config/config.model';
-import { IOneDriveItem, IOneDriveQueryResult } from './one-drive.model';
+import { URLSearchParams } from 'url';
+import { IAppConfig, IOneDriveConfig } from '../config/config.model';
+import {
+  IMicrosoftCredentials,
+  IOneDriveItem,
+  IOneDriveQueryResult,
+} from './one-drive.model';
 
-const scopes = ['user.read', 'mail.read', 'files.read.all'];
+const scopes = ['user.read', 'files.read.all', 'offline_access'];
 const TokenFilePath = path.join(homedir(), 'Downloads/ms-auth-tokens.json');
 
 type IDownloadSubset = Pick<
@@ -37,9 +43,13 @@ export class OneDriveApi implements OnModuleInit {
 
   private authorized = (): void => undefined;
 
+  private readonly config: IOneDriveConfig;
+
   private readonly logger = new Logger(OneDriveApi.name);
 
-  public constructor(private readonly config: ConfigService<IAppConfig, true>) {
+  public constructor(configService: ConfigService<IAppConfig, true>) {
+    this.config = configService.get<IOneDriveConfig>('oneDrive');
+
     this.authorization = new Promise((r) => {
       this.authorized = r;
     });
@@ -77,25 +87,88 @@ export class OneDriveApi implements OnModuleInit {
   }
 
   public async onModuleInit(): Promise<void> {
-    if (existsSync(TokenFilePath)) {
-      const token: AccessToken = JSON.parse(
-        await readFile(TokenFilePath, 'utf-8'),
-      );
+    if (!existsSync(TokenFilePath)) {
+      this.showAuthUrl();
 
-      const expiration = new Date(token.expiresOnTimestamp);
-      if (token.expiresOnTimestamp > Date.now()) {
-        this.logger.log(`Credentials will expire on ${expiration}`);
-
-        this.createApi({ getToken: async () => token });
-        this.authorized();
-
-        return;
-      }
-
-      this.logger.log(`Credentials expired on ${expiration}`);
+      return;
     }
 
-    this.getFreshAuthToken();
+    const tokens: IMicrosoftCredentials = JSON.parse(
+      await readFile(TokenFilePath, 'utf-8'),
+    );
+
+    const expiration = new Date(tokens.expiry_date);
+    const token: AccessToken = {
+      token: tokens.access_token,
+      expiresOnTimestamp: tokens.expiry_date,
+    };
+    this.createApi({ getToken: async () => token });
+
+    if (tokens.expiry_date > Date.now()) {
+      this.logger.log(`Credentials will expire on ${expiration}`);
+      this.authorized();
+
+      return;
+    }
+
+    this.logger.log(`Credentials expired on ${expiration}`);
+    // TODO refresh tokens using the refresh_token
+    // see
+  }
+
+  // public async onModuleInitOld(): Promise<void> {
+  //   if (existsSync(TokenFilePath)) {
+  //     const token: AccessToken = JSON.parse(
+  //       await readFile(TokenFilePath, 'utf-8'),
+  //     );
+
+  //     const expiration = new Date(token.expiresOnTimestamp);
+  //     if (token.expiresOnTimestamp > Date.now()) {
+  //       this.logger.log(`Credentials will expire on ${expiration}`);
+
+  //       this.createApi({ getToken: async () => token });
+  //       this.authorized();
+
+  //       return;
+  //     }
+
+  //     this.logger.log(`Credentials expired on ${expiration}`);
+  //   }
+
+  //   // this.getFreshAuthToken();
+  // }
+
+  public async saveToken(code: string): Promise<void> {
+    if (!code) {
+      throw new Error('No code!');
+    }
+
+    const { clientId, clientSecret, replyUrl, tenantId } = this.config;
+
+    const res = await fetch(
+      `https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/token`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          grant_type: 'authorization_code',
+          client_id: clientId,
+          client_secret: clientSecret,
+          redirect_uri: `http://localhost:3000${replyUrl}`,
+          scope: scopes.join(' '),
+          code,
+        }),
+      },
+    );
+
+    if (!res.ok) {
+      throw new Error(`Unable to get token. Status ${res.status}`);
+    }
+
+    const token: IMicrosoftCredentials = await res.json();
+
+    const expiry_date = Date.now() + token.expires_in * 1000;
+    await this.saveCredentials({ ...token, expiry_date });
   }
 
   private async downloadPage(req: string): Promise<IPhotoRecord[]> {
@@ -137,22 +210,22 @@ export class OneDriveApi implements OnModuleInit {
     return page.concat(await this.downloadPage(nextReq));
   }
 
-  private async getFreshAuthToken(): Promise<void> {
-    const { clientId, tenantId } = this.config.get('oneDrive');
-    const tokenProvider = new DeviceCodeCredential({
-      clientId,
-      tenantId,
-      userPromptCallback: (info: DeviceCodeInfo) => {
-        console.log(info.message);
-      },
-    });
-    this.createApi(tokenProvider);
-    const token = await tokenProvider.getToken(scopes);
-    await writeFile(TokenFilePath, JSON.stringify(token));
-    this.logger.log(`Tokens saved to ${TokenFilePath}`);
+  // private async getFreshAuthToken(): Promise<void> {
+  //   const { clientId, tenantId } = this.config.get('oneDrive');
+  //   const tokenProvider = new DeviceCodeCredential({
+  //     clientId,
+  //     tenantId,
+  //     userPromptCallback: (info: DeviceCodeInfo) => {
+  //       console.log(info.message);
+  //     },
+  //   });
+  //   this.createApi(tokenProvider);
+  //   const token = await tokenProvider.getToken(scopes);
+  //   await writeFile(TokenFilePath, JSON.stringify(token));
+  //   this.logger.log(`Tokens saved to ${TokenFilePath}`);
 
-    this.authorized();
-  }
+  //   this.authorized();
+  // }
 
   private createApi(tokenProvider: TokenCredential): void {
     const authProvider = new TokenCredentialAuthenticationProvider(
@@ -164,5 +237,37 @@ export class OneDriveApi implements OnModuleInit {
       authProvider,
       debugLogging: true,
     });
+  }
+
+  private async saveCredentials(
+    credentials: IMicrosoftCredentials,
+  ): Promise<void> {
+    await writeFile(TokenFilePath, JSON.stringify(credentials));
+    this.logger.log(`Microsoft credentials saved to ${TokenFilePath}`);
+  }
+
+  /**
+   * See https://learn.microsoft.com/en-us/graph/auth-v2-user#authorization-response
+   * Microsoft should callback on /ms/oauth2-callback
+   * @see OneDriveController
+   */
+  private showAuthUrl(): void {
+    const origin = 'https://login.microsoftonline.com';
+    const mainPath = [this.config.tenantId, 'oauth2/v2.0/authorize'].join('/');
+    const query = [
+      `client_id=${this.config.clientId}`,
+      'response_type=code',
+      `redirect_uri=http://localhost:3000${this.config.replyUrl}`,
+      `scope=${scopes.join(' ')}`,
+      'response_mode=query',
+      'state=fudged',
+    ].join('&');
+
+    const url = `${origin}/${mainPath}?${query}`;
+
+    setTimeout(() => {
+      console.log('\nNeed to get credentials for OneDrive API.');
+      console.log(`Go to`, url);
+    }, 2000);
   }
 }
