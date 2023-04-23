@@ -11,7 +11,16 @@ Very rudimentary at the moment.
 
 Next steps:
 
-- Download photo metadata from Google to ensure local repo is accurate. This is now essential since the photo db got wiped. (So another feature is to back it up before starting to make changes on it). So now we need to get the photos from google and add them back so as to avoid re-uploading all 2300+ of them. Note some of this code exists in photo-sync-old folder
+- Recreated photo db. But 1609 could not be matched to google photos because looks like all those had the wrong filename in google photos. So reuploading all those. These will be duplicated in the album. at some point should remove them. There is no ability to delete photos via API, but can remove them from the album. Do not see an easy way to then totally remove them. Two ideas:
+  1.  Move them to another album. (Cannot seem to be able to even archive). Then I guess manually delete one by one since there's no batch remove
+  2.  Add description and then search by that to delete. But so far in the UI adding description does not make them appear in search like below. It takes quite a few minutes to index
+
+```
+test tagged description
+https://photos.google.com/search/_cAF1QipPMrH5bK6RhbFNdpXSliUPBFQacrO2TVVk_Jorge%20Gonzalez/photo/AF1QipO-F0VMr2d8y0WqFyr5mUggVV4pFTtTo0DUSJ41
+```
+
+- Should back up JSON before doing updates in case things go corrupt again.
 - See if we can hook up to the new album in one drive since the old one no longer shows on their web app. If so, we want to convert to that, which means copying all from the current album to the new one. No idea how hard that is.
 - Can we find duplicates? Test what happens when we add same photo to the same album multiple times (in one drive)
 - Can we find rotated photos? I guess aspect ratio is not good enough.

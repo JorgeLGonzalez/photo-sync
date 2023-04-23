@@ -1,4 +1,4 @@
-import { Logger, OnModuleInit } from '@nestjs/common';
+import { Logger } from '@nestjs/common';
 import { Injectable } from '@nestjs/common';
 import { existsSync } from 'fs';
 import { readFile, writeFile } from 'fs/promises';
@@ -11,7 +11,7 @@ import { IPhotoRecord, IPhotoRepo } from './photo-repo.model';
 const PhotoDbFile = path.join(homedir(), 'Documents/photo-db.json');
 
 @Injectable()
-export class PhotoRepo implements OnModuleInit {
+export class PhotoRepo {
   private readonly logger = new Logger(PhotoRepo.name);
 
   public constructor(
@@ -39,7 +39,8 @@ export class PhotoRepo implements OnModuleInit {
       throw err;
     }
   }
-  public async onModuleInit(): Promise<void> {
+
+  public async sync(): Promise<void> {
     await this.oneDriveApi.authorization;
     const repo = await this.loadRepo();
     const records = await this.oneDriveApi.downloadRecords();
@@ -62,7 +63,6 @@ export class PhotoRepo implements OnModuleInit {
     await this.writeRepo(repo);
 
     this.logger.verbose('All done! Exiting...');
-    process.exit(0);
   }
 
   public async writeRepo(repo: IPhotoRepo): Promise<void> {

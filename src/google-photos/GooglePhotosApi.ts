@@ -1,6 +1,6 @@
-import { Logger } from '@nestjs/common';
+import { HttpStatus, Logger } from '@nestjs/common';
 import { Injectable } from '@nestjs/common';
-import got, { RequestError } from 'got';
+import got, { HTTPError, RequestError } from 'got';
 import { Readable } from 'node:stream';
 import {
   IGooglePhotoItem,
@@ -82,7 +82,7 @@ export class GooglePhotosApi {
           responseType: 'json',
           resolveBodyOnly: true,
           headers: {
-            Authorization: this.auth.authorization,
+            Authorization: await this.auth.getAuthorization(),
             'Content-type': 'application/json',
           },
         },
@@ -107,7 +107,7 @@ export class GooglePhotosApi {
         'https://photoslibrary.googleapis.com/v1/mediaItems:batchCreate',
         {
           headers: {
-            Authorization: this.auth.authorization,
+            Authorization: await this.auth.getAuthorization(),
             'Content-type': 'application/json',
           },
           json: {
@@ -138,7 +138,7 @@ export class GooglePhotosApi {
 
       return res.newMediaItemResults[0];
     } catch (err) {
-      this.logger.error(err);
+      this.logger.error(`Error creating item: ${err}`);
       this.logger.error(JSON.stringify(err));
       throw err;
     }
@@ -154,7 +154,7 @@ export class GooglePhotosApi {
         {
           body: photoStream,
           headers: {
-            Authorization: this.auth.authorization,
+            Authorization: await this.auth.getAuthorization(),
             'Content-type': 'application/octet-stream',
             'X-Goog-Upload-Content-Type': mimeType,
             'X-Goog-Upload-Protocol': 'raw',
