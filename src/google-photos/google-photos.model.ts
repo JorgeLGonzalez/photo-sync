@@ -6,7 +6,7 @@ export interface IGoogleMediaMetadata {
 }
 
 export interface IGoogleMediaItem {
-  description: string;
+  description?: string;
   filename: string;
   mediaMetadata: IGoogleMediaMetadata;
   id: string;
@@ -22,4 +22,9 @@ export interface IGoogleNewMediaItemResult {
 
 export interface IGoogleBatchCreateResponse {
   newMediaItemResults: IGoogleNewMediaItemResult[];
+}
+
+export interface IGooglePhotoMediaItemsResponse {
+  mediaItems: IGoogleMediaItem[];
+  nextPageToken: string;
 }

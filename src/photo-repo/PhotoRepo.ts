@@ -20,6 +20,11 @@ export class PhotoRepo implements OnModuleInit {
   ) {}
 
   public async onModuleInit(): Promise<void> {
+    if (this.googleApi) {
+      await this.googleApi.downloadPhotos();
+      return;
+    }
+
     await this.oneDriveApi.authorization;
     const repo = await this.loadRepo();
     const records = await this.oneDriveApi.downloadRecords();
@@ -31,31 +36,39 @@ export class PhotoRepo implements OnModuleInit {
     let index = 1;
     for (const record of missing) {
       this.logger.log(`Copying ${record.id} (${index} of ${missing.length})`);
-      await this.transferPhoto(record);
+      // await this.transferPhoto(record);
 
       if (index % 10 === 0) {
-        this.writeRepo(repo);
+        // this.writeRepo(repo);
       }
       index += 1;
     }
 
-    this.writeRepo(repo);
+    await this.writeRepo(repo);
+
+    this.logger.verbose('All done! Exiting...');
+    process.exit(0);
   }
 
   private async loadRepo(): Promise<IPhotoRepo> {
-    const repo: IPhotoRepo = existsSync(PhotoDbFile)
-      ? JSON.parse(await readFile(PhotoDbFile, 'utf8'))
-      : {
-          creationDate: new Date().toISOString(),
-          records: [],
-          updateDate: new Date().toISOString(),
-        };
+    try {
+      const repo: IPhotoRepo = existsSync(PhotoDbFile)
+        ? JSON.parse(await readFile(PhotoDbFile, 'utf8'))
+        : {
+            creationDate: new Date().toISOString(),
+            records: [],
+            updateDate: new Date().toISOString(),
+          };
 
-    this.logger.log(`Loaded repo from ${PhotoDbFile}`);
-    this.logger.log(`Repo has ${repo.records.length} records.`);
-    this.logger.log(`Repo last updated on ${new Date(repo.updateDate)}`);
+      this.logger.log(`Loaded repo from ${PhotoDbFile}`);
+      this.logger.log(`Repo has ${repo.records.length} records.`);
+      this.logger.log(`Repo last updated on ${new Date(repo.updateDate)}`);
 
-    return repo;
+      return repo;
+    } catch (err) {
+      this.logger.error(`Error loading repo from ${PhotoDbFile}: ${err}`);
+      throw err;
+    }
   }
 
   private async transferPhoto(record: IPhotoRecord): Promise<void> {
