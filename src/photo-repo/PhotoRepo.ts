@@ -19,38 +19,7 @@ export class PhotoRepo implements OnModuleInit {
     private readonly oneDriveApi: OneDriveApi,
   ) {}
 
-  public async onModuleInit(): Promise<void> {
-    if (this.googleApi) {
-      await this.googleApi.downloadPhotos();
-      return;
-    }
-
-    await this.oneDriveApi.authorization;
-    const repo = await this.loadRepo();
-    const records = await this.oneDriveApi.downloadRecords();
-    await this.updateDb(repo, records);
-
-    const missing = repo.records.filter((r) => !r.google);
-    this.logger.log(`${missing.length} photos missing from Google Photos`);
-
-    let index = 1;
-    for (const record of missing) {
-      this.logger.log(`Copying ${record.id} (${index} of ${missing.length})`);
-      // await this.transferPhoto(record);
-
-      if (index % 10 === 0) {
-        // this.writeRepo(repo);
-      }
-      index += 1;
-    }
-
-    await this.writeRepo(repo);
-
-    this.logger.verbose('All done! Exiting...');
-    process.exit(0);
-  }
-
-  private async loadRepo(): Promise<IPhotoRepo> {
+  public async loadRepo(): Promise<IPhotoRepo> {
     try {
       const repo: IPhotoRepo = existsSync(PhotoDbFile)
         ? JSON.parse(await readFile(PhotoDbFile, 'utf8'))
@@ -69,6 +38,37 @@ export class PhotoRepo implements OnModuleInit {
       this.logger.error(`Error loading repo from ${PhotoDbFile}: ${err}`);
       throw err;
     }
+  }
+  public async onModuleInit(): Promise<void> {
+    await this.oneDriveApi.authorization;
+    const repo = await this.loadRepo();
+    const records = await this.oneDriveApi.downloadRecords();
+    await this.updateDb(repo, records);
+
+    const missing = repo.records.filter((r) => !r.google);
+    this.logger.log(`${missing.length} photos missing from Google Photos`);
+
+    let index = 1;
+    for (const record of missing) {
+      this.logger.log(`Copying ${record.id} (${index} of ${missing.length})`);
+      await this.transferPhoto(record);
+
+      if (index % 10 === 0) {
+        this.writeRepo(repo);
+      }
+      index += 1;
+    }
+
+    await this.writeRepo(repo);
+
+    this.logger.verbose('All done! Exiting...');
+    process.exit(0);
+  }
+
+  public async writeRepo(repo: IPhotoRepo): Promise<void> {
+    repo.updateDate = new Date().toISOString();
+    await writeFile(PhotoDbFile, JSON.stringify(repo));
+    this.logger.log(`Wrote ${repo.records.length} records to ${PhotoDbFile}`);
   }
 
   private async transferPhoto(record: IPhotoRecord): Promise<void> {
@@ -119,11 +119,5 @@ export class PhotoRepo implements OnModuleInit {
     await this.writeRepo(repo);
 
     return repo;
-  }
-
-  private async writeRepo(repo: IPhotoRepo): Promise<void> {
-    repo.updateDate = new Date().toISOString();
-    await writeFile(PhotoDbFile, JSON.stringify(repo));
-    this.logger.log(`Wrote ${repo.records.length} records to ${PhotoDbFile}`);
   }
 }

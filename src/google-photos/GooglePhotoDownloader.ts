@@ -10,6 +10,11 @@ import { GooglePhotosAuthorizer } from './GooglePhotosAuthorizer';
 
 @Injectable()
 export class GooglePhotoDownloader {
+  public static readonly FilePath = path.join(
+    homedir(),
+    'Downloads/google-photos.json',
+  );
+
   private readonly logger = new Logger(GooglePhotoDownloader.name);
 
   public constructor(private readonly auth: GooglePhotosAuthorizer) {}
@@ -17,7 +22,7 @@ export class GooglePhotoDownloader {
   public async download(albumId: string): Promise<void> {
     const photos = await this.downloadPage(albumId);
 
-    const filePath = path.join(homedir(), 'Downloads/google-photos.json');
+    const filePath = GooglePhotoDownloader.FilePath;
     await writeFile(filePath, JSON.stringify(photos));
     this.logger.log(`Saved ${photos.length} to ${filePath}`);
   }

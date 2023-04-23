@@ -10,15 +10,15 @@ export interface IOneDriveConfig {
   tenantId: string;
 }
 
-export interface IAppConfig {
-  googlePhotos: IGooglePhotosConfig;
-  oneDrive: IOneDriveConfig;
-}
-
 export interface IGoogleCredentials extends Credentials {
   access_token: string;
   refresh_token: string;
   scope: string;
   token_type: string;
   expiry_date: number;
+}
+
+export interface IAppConfig {
+  googlePhotos: IGooglePhotosConfig;
+  oneDrive: IOneDriveConfig;
 }

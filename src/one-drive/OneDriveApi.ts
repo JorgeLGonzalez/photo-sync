@@ -45,6 +45,10 @@ export class OneDriveApi implements OnModuleInit {
     });
   }
 
+  public createUniqueName(id: string, name: string): string {
+    return [id, name].join('|');
+  }
+
   public async downloadPhoto(
     record: IPhotoRecord,
   ): Promise<IPhotoTransferInfo> {
@@ -66,7 +70,7 @@ export class OneDriveApi implements OnModuleInit {
       id: downloadInfo.id,
       mimeType: downloadInfo.file.mimeType,
       stream: got.stream(downloadInfo['@microsoft.graph.downloadUrl']),
-      uniqueName: [downloadInfo.id, downloadInfo.name].join('|'),
+      uniqueName: this.createUniqueName(downloadInfo.id, downloadInfo.name),
     };
   }
 
