@@ -21,12 +21,10 @@ https://photos.google.com/search/_cAF1QipPMrH5bK6RhbFNdpXSliUPBFQacrO2TVVk_Jorge
 ```
 
 - Should back up JSON before doing updates in case things go corrupt again.
-- See if we can hook up to the new album in one drive since the old one no longer shows on their web app. If so, we want to convert to that, which means copying all from the current album to the new one. No idea how hard that is.
 - Can we find duplicates? Test what happens when we add same photo to the same album multiple times (in one drive)
 - Can we find rotated photos? I guess aspect ratio is not good enough.
 - Authentication for Microsoft expires after 1h and requires a code. Look into refreshable tokens. Did some work in this in branch ms-oauth, but it did not work because a better auth did not work w/ my account since it lacks sharepoint. There may be ways around it or maybe the auth i tried wasn't the best. It's a pain.
 - Download from MS only files added to album or updated since last sync. (OneDrive has a sync feature as well which perhaps could be worth it.)
 - Authentication for Google seems to allow token refreshing, but not sure for how long. However, it will not refresh during a run.
 - Convert to esm
-- Run as CLI or shutdown server once done. (It is only a server because Google auth uses a callback for initial tokens.) Could of course turn into a web or other better UI-based app, but that seems hardly worth it...
 - Improve transfer speed by parallel transfers and bulk creation of media items in Google. (Totally overkill for my use case.)

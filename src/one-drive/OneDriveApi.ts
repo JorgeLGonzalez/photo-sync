@@ -22,10 +22,10 @@ import { IAppConfig } from '../config/config.model';
 import { IOneDriveItem, IOneDriveQueryResult } from './one-drive.model';
 
 const scopes = [
-  'user.read',
-  'mail.read',
-  'files.read.all',
-  'Files.ReadWrite',
+  // 'user.read',
+  // 'mail.read',
+  // 'files.read.all',
+  // 'Files.ReadWrite',
   'Files.ReadWrite.All',
 ];
 const TokenFilePath = path.join(homedir(), 'Downloads/ms-auth-tokens.json');
@@ -85,7 +85,7 @@ export class OneDriveApi implements OnModuleInit {
   }
 
   public async downloadRecords(
-    album = '/me/drive/items/2A6D8CEFB23FAC76%2133520/children',
+    album = '/me/drive/items/2A6D8CEFB23FAC76%2150624/children',
   ): Promise<IPhotoRecord[]> {
     return await this.downloadPage(album);
   }
@@ -120,7 +120,11 @@ export class OneDriveApi implements OnModuleInit {
       .get();
 
     this.logger.log(
-      ['Found', result['@odata.count'], 'photos in the Love album'].join(' '),
+      [
+        'Found',
+        result['@odata.count'],
+        'photos in the "selections" album',
+      ].join(' '),
     );
     this.logger.log(`Got ${result.value.length} in this page`);
 
@@ -167,7 +171,7 @@ export class OneDriveApi implements OnModuleInit {
   private createApi(tokenProvider: TokenCredential): void {
     const authProvider = new TokenCredentialAuthenticationProvider(
       tokenProvider,
-      { scopes: scopes },
+      { scopes },
     );
 
     this._api = Client.initWithMiddleware({
