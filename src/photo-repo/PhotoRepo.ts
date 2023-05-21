@@ -14,6 +14,13 @@ const PhotoDbFile = path.join(homedir(), 'Documents/photo-db.json');
 export class PhotoRepo {
   private readonly logger = new Logger(PhotoRepo.name);
 
+  public get repo(): IPhotoRepo {
+    if (!this._repo) throw new Error('No Repo');
+    return this._repo;
+  }
+
+  private _repo?: IPhotoRepo;
+
   public constructor(
     private readonly googleApi: GooglePhotosApi,
     private readonly oneDriveApi: OneDriveApi,
@@ -41,12 +48,9 @@ export class PhotoRepo {
   }
 
   public async sync(): Promise<void> {
-    await this.oneDriveApi.authorization;
-    const repo = await this.loadRepo();
-    const records = await this.oneDriveApi.downloadRecords();
-    await this.updateDb(repo, records);
+    await this.syncDown();
 
-    const missing = repo.records.filter((r) => !r.google);
+    const missing = this.repo.records.filter((r) => !r.google);
     this.logger.log(`${missing.length} photos missing from Google Photos`);
 
     let index = 1;
@@ -55,14 +59,23 @@ export class PhotoRepo {
       await this.transferPhoto(record);
 
       if (index % 10 === 0) {
-        this.writeRepo(repo);
+        this.writeRepo(this.repo);
       }
       index += 1;
     }
 
-    await this.writeRepo(repo);
+    await this.writeRepo(this.repo);
 
     this.logger.verbose('All done! Exiting...');
+  }
+
+  public async syncDown(): Promise<IPhotoRepo> {
+    await this.oneDriveApi.authorization;
+    this._repo = await this.loadRepo();
+    const records = await this.oneDriveApi.downloadRecords();
+    await this.updateDb(records);
+
+    return this._repo;
   }
 
   public async writeRepo(repo: IPhotoRepo): Promise<void> {
@@ -85,14 +98,11 @@ export class PhotoRepo {
     }
   }
 
-  private async updateDb(
-    repo: IPhotoRepo,
-    records: IPhotoRecord[],
-  ): Promise<IPhotoRepo> {
+  private async updateDb(records: IPhotoRecord[]): Promise<IPhotoRepo> {
     this.logger.log(
       `Updating repo with ${records.length} OneDrive (potentially new/changed) items`,
     );
-    const db = repo.records.reduce(
+    const db = this.repo.records.reduce(
       (map, r) => map.set(r.id, r),
       new Map<string, IPhotoRecord>(),
     );
@@ -114,10 +124,10 @@ export class PhotoRepo {
       db.set(r.id, { ...r, google });
     });
 
-    repo.records = [...db.values()];
+    this.repo.records = [...db.values()];
 
-    await this.writeRepo(repo);
+    await this.writeRepo(this.repo);
 
-    return repo;
+    return this.repo;
   }
 }

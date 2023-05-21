@@ -21,7 +21,13 @@ import {
 import { IAppConfig } from '../config/config.model';
 import { IOneDriveItem, IOneDriveQueryResult } from './one-drive.model';
 
-const scopes = ['user.read', 'mail.read', 'files.read.all'];
+const scopes = [
+  'user.read',
+  'mail.read',
+  'files.read.all',
+  'Files.ReadWrite',
+  'Files.ReadWrite.All',
+];
 const TokenFilePath = path.join(homedir(), 'Downloads/ms-auth-tokens.json');
 
 type IDownloadSubset = Pick<
@@ -31,7 +37,11 @@ type IDownloadSubset = Pick<
 
 @Injectable()
 export class OneDriveApi implements OnModuleInit {
-  private api?: Client;
+  public get api(): Client {
+    if (!this._api) throw new Error('API not initialized');
+    return this._api;
+  }
+  private _api?: Client;
 
   public readonly authorization: Promise<void>;
 
@@ -74,10 +84,10 @@ export class OneDriveApi implements OnModuleInit {
     };
   }
 
-  public async downloadRecords(): Promise<IPhotoRecord[]> {
-    return await this.downloadPage(
-      '/me/drive/items/2A6D8CEFB23FAC76%2133520/children',
-    );
+  public async downloadRecords(
+    album = '/me/drive/items/2A6D8CEFB23FAC76%2133520/children',
+  ): Promise<IPhotoRecord[]> {
+    return await this.downloadPage(album);
   }
 
   public async onModuleInit(): Promise<void> {
@@ -103,10 +113,6 @@ export class OneDriveApi implements OnModuleInit {
   }
 
   private async downloadPage(req: string): Promise<IPhotoRecord[]> {
-    if (!this.api) {
-      throw new Error('No API');
-    }
-
     const result: IOneDriveQueryResult = await this.api
       .api(req)
       .select('id,name,size,webUrl,photo,lastModifiedDateTime,file,description')
@@ -164,7 +170,7 @@ export class OneDriveApi implements OnModuleInit {
       { scopes: scopes },
     );
 
-    this.api = Client.initWithMiddleware({
+    this._api = Client.initWithMiddleware({
       authProvider,
       debugLogging: true,
     });
