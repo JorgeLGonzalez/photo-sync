@@ -1,7 +1,7 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { google } from 'googleapis';
-import { existsSync } from 'node:fs';
+import { existsSync, unlinkSync } from 'node:fs';
 import { readFile, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import path from 'node:path';
@@ -23,6 +23,12 @@ export class GooglePhotosAuthorizer implements OnModuleInit {
   private readonly client: OAuth2Client;
 
   private readonly logger = new Logger(GooglePhotosAuthorizer.name);
+
+  private readonly REQUIRED_SCOPES = [
+    'https://www.googleapis.com/auth/photoslibrary.appendonly',
+    'https://www.googleapis.com/auth/photoslibrary.readonly.appcreateddata',
+    'https://www.googleapis.com/auth/photoslibrary.edit.appcreateddata',
+  ];
 
   public constructor(configService: ConfigService<IAppConfig, true>) {
     const { clientId, clientSecret } = configService.get('googlePhotos');
@@ -67,6 +73,8 @@ export class GooglePhotosAuthorizer implements OnModuleInit {
 
   public async refresh(): Promise<void> {
     const res = await this.client.refreshAccessToken();
+    this.logger.debug('Token scopes:', res.credentials.scope);
+
     this.expiration = res.credentials.expiry_date
       ? new Date(res.credentials.expiry_date)
       : this.expiration;
@@ -80,6 +88,7 @@ export class GooglePhotosAuthorizer implements OnModuleInit {
     if (!code) {
       throw new Error('No code!');
     }
+    this.logger.log('Saving Google credentials...');
     const { tokens } = await this.client.getToken(code);
     await this.saveCredentials(tokens);
   }
@@ -90,14 +99,29 @@ export class GooglePhotosAuthorizer implements OnModuleInit {
   }
 
   private showAuthUrl(): void {
+    this.logger.error(`Recreating token file ${TokenFilePath}`);
     const url = this.client.generateAuthUrl({
       access_type: 'offline',
-      scope: ['https://www.googleapis.com/auth/photoslibrary'],
+      scope: this.REQUIRED_SCOPES,
+      // Force consent screen to appear
+      prompt: 'consent',
+      // Include granted scopes and request new ones
+      include_granted_scopes: true,
     });
 
+    // Clear any existing credentials
+    this.client.setCredentials({});
+
+    // if (existsSync(TokenFilePath)) {
+    //   this.logger.log('Removing existing token file...');
+    //   unlinkSync(TokenFilePath);
+    // }
+
     setTimeout(() => {
-      console.log('\nNeed to get credentials for Google API.');
+      console.log(
+        '\nNeed to get new credentials for Google API with updated scopes.',
+      );
       console.log(`Go to`, url);
-    }, 2000);
+    }, 2_000);
   }
 }

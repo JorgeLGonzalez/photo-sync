@@ -138,8 +138,29 @@ export class GooglePhotosApi {
 
       return res.newMediaItemResults[0];
     } catch (err) {
-      this.logger.error(`Error creating item: ${err}`);
-      this.logger.error(JSON.stringify(err));
+      if (err instanceof HTTPError) {
+        this.logger.error('Media Item Creation Failed:', {
+          statusCode: err.response.statusCode,
+          statusMessage: err.response.statusMessage,
+          responseBody: JSON.stringify(err.response.body, null, 2),
+          requestBody: JSON.stringify(
+            {
+              albumId: AlbumId,
+              newMediaItems: [
+                {
+                  description,
+                  simpleMediaItem: {
+                    fileName: uniqueName,
+                    uploadToken,
+                  },
+                },
+              ],
+            },
+            null,
+            2,
+          ),
+        });
+      }
       throw err;
     }
   }
