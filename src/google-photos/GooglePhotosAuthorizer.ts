@@ -10,6 +10,8 @@ import { OAuth2Client } from 'googleapis-common';
 import { Credentials } from 'google-auth-library';
 import { differenceInMinutes } from 'date-fns';
 
+/** True when started via `npm run auth`: only collect a new token, no sync. */
+const AuthOnly = process.env.AUTH_ONLY === '1';
 const TokenFilePath = path.join(homedir(), 'Downloads/google-auth-tokens.json');
 
 @Injectable()
@@ -50,6 +52,11 @@ export class GooglePhotosAuthorizer implements OnModuleInit {
   public async onModuleInit(): Promise<void> {
     if (!existsSync(TokenFilePath)) {
       this.showAuthUrl();
+      if (!AuthOnly) {
+        throw new Error(
+          `No Google token file at ${TokenFilePath}. Run \`npm run auth\` first.`,
+        );
+      }
 
       return;
     }
@@ -68,7 +75,18 @@ export class GooglePhotosAuthorizer implements OnModuleInit {
     }
 
     this.logger.log(`Credentials expired on ${this.expiration}. Refreshing...`);
-    await this.refresh();
+    try {
+      await this.refresh();
+    } catch (err) {
+      if (!String(err).includes('invalid_grant')) throw err;
+      // Refresh token was revoked/expired (see src/google-photos/README.md).
+      this.showAuthUrl();
+      if (!AuthOnly) {
+        throw new Error(
+          'Google refresh token is invalid. Run `npm run auth`, open the URL it prints, then re-run `npm start`.',
+        );
+      }
+    }
   }
 
   public async refresh(): Promise<void> {
@@ -91,6 +109,11 @@ export class GooglePhotosAuthorizer implements OnModuleInit {
     this.logger.log('Saving Google credentials...');
     const { tokens } = await this.client.getToken(code);
     await this.saveCredentials(tokens);
+    if (AuthOnly) {
+      this.logger.log(
+        'Token saved. Stop this process (Ctrl-C) and run `npm start`.',
+      );
+    }
   }
 
   private async saveCredentials(credentials: Credentials): Promise<void> {
@@ -99,7 +122,7 @@ export class GooglePhotosAuthorizer implements OnModuleInit {
   }
 
   private showAuthUrl(): void {
-    this.logger.error(`Recreating token file ${TokenFilePath}`);
+    this.logger.error(`Need a new Google token file at ${TokenFilePath}`);
     const url = this.client.generateAuthUrl({
       access_type: 'offline',
       scope: this.REQUIRED_SCOPES,
